@@ -10,6 +10,7 @@ import (
 	"github.com/onsi/gomega"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	"go.uber.org/zap"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -38,18 +39,35 @@ func TestSyncImageSet(t *testing.T) {
 
 	options.GitRepository = "badurl"
 	iCtrl := NewImageSetController(c, restMapper, options)
-	err = iCtrl.syncImageSet()
+	err = iCtrl.syncImageSet(true)
 	g.Expect(err).To(gomega.HaveOccurred())
+
+	// Create dummy cluster imageset that will be deleted by cleanup routine
+	cis := &hivev1.ClusterImageSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "dummy-img4.11.0-x86-64-appsub",
+		},
+		Spec: hivev1.ClusterImageSetSpec{
+			ReleaseImage: "quay.io/openshift-release-dev/ocp-release:4.11.0-x86_64-0",
+		},
+	}
+	err = c.Create(context.TODO(), cis)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
 
 	options.GitRepository = "https://github.com/stolostron/acm-hive-openshift-releases.git"
 	iCtrl = NewImageSetController(c, restMapper, options)
-	err = iCtrl.syncImageSet()
+	err = iCtrl.syncImageSet(true)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 
 	imagesetList := &hivev1.ClusterImageSetList{}
 	err = c.List(context.TODO(), imagesetList, &client.ListOptions{})
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	g.Expect(imagesetList.Items).Should(gomega.ContainElements())
+
+	// Dummy imageset should be deleted
+	err = c.Get(context.TODO(), client.ObjectKeyFromObject(cis), cis)
+	g.Expect(err).To(gomega.HaveOccurred())
+	g.Expect(errors.IsNotFound(err)).To(gomega.BeTrue())
 }
 
 func TestSetupImageSetController(t *testing.T) {
@@ -109,7 +127,7 @@ func TestApplyClusterImageSet(t *testing.T) {
 	bCis, err := yaml.Marshal(cis)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 
-	err = iCtrl.applyClusterImageSetFile(bCis)
+	_, err = iCtrl.applyClusterImageSetFile(bCis)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	createdCis := &hivev1.ClusterImageSet{}
 	err = iCtrl.client.Get(context.TODO(), client.ObjectKeyFromObject(cis), createdCis)
@@ -120,7 +138,7 @@ func TestApplyClusterImageSet(t *testing.T) {
 	bCis2, err := yaml.Marshal(cis2)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 
-	err = iCtrl.applyClusterImageSetFile(bCis2)
+	_, err = iCtrl.applyClusterImageSetFile(bCis2)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	err = iCtrl.client.Get(context.TODO(), client.ObjectKeyFromObject(cis2), createdCis)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
@@ -135,7 +153,7 @@ func TestApplyClusterImageSet(t *testing.T) {
 
 	// unmarshal error
 	badCis := []byte("bad$:xys")
-	err = iCtrl.applyClusterImageSetFile(badCis)
+	_, err = iCtrl.applyClusterImageSetFile(badCis)
 	g.Expect(err).To(gomega.HaveOccurred())
 }
 

@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"github.com/ghodss/yaml"
@@ -156,17 +157,21 @@ func NewImageSetController(c client.Client, r meta.RESTMapper, o *ImagesetOption
 }
 
 func (r *ImageSetController) Start(ctx context.Context) error {
+	cleanup := true
+
 	go wait.Until(func() {
-		err := r.syncImageSet()
+		err := r.syncImageSet(cleanup)
 		if err != nil {
 			r.log.Error(err, "error syncing cluster imagesets")
 		}
+
+		cleanup = false // Perform cleanup on first run only
 	}, time.Duration(r.interval)*time.Second, ctx.Done())
 
 	return nil
 }
 
-func (r *ImageSetController) syncImageSet() error {
+func (r *ImageSetController) syncImageSet(cleanup bool) error {
 	r.log.Info("sync cluster imageset")
 
 	tempDir, err := ioutil.TempDir(os.TempDir(), "cluster-imageset-")
@@ -179,8 +184,16 @@ func (r *ImageSetController) syncImageSet() error {
 		return err
 	}
 
-	if err := r.applyImageSetsFromClonedGitRepo(tempDir); err != nil {
+	imagesetList, err := r.applyImageSetsFromClonedGitRepo(tempDir)
+	if err != nil {
 		return err
+	}
+
+	if cleanup {
+		err = r.cleanupClusterImages(imagesetList)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -205,7 +218,8 @@ func (r *ImageSetController) cloneGitRepo(destDir string) error {
 	return nil
 }
 
-func (r *ImageSetController) applyImageSetsFromClonedGitRepo(destDir string) error {
+func (r *ImageSetController) applyImageSetsFromClonedGitRepo(destDir string) ([]string, error) {
+	imageSetList := []string{}
 	resourcePath := filepath.Join(destDir, r.gitPath, r.channel)
 	r.log.Info(fmt.Sprintf("applying cluster imagesets from path: %v", resourcePath))
 
@@ -218,37 +232,40 @@ func (r *ImageSetController) applyImageSetsFromClonedGitRepo(destDir string) err
 					return err
 				}
 
-				if err := r.applyClusterImageSetFile(file); err != nil {
+				imageset, err := r.applyClusterImageSetFile(file)
+				if err != nil {
 					r.log.Error(err, "failed to apply cluster imageset file:"+path)
 					return err
 				}
+				imageSetList = append(imageSetList, imageset.GetName())
 			}
 
 			return nil
 		})
 
-	return err
+	return imageSetList, err
 }
 
-func (r *ImageSetController) applyClusterImageSetFile(file []byte) error {
-	clusterset := &hivev1.ClusterImageSet{}
-	if err := yaml.Unmarshal(file, clusterset); err != nil {
-		return err
+func (r *ImageSetController) applyClusterImageSetFile(file []byte) (*hivev1.ClusterImageSet, error) {
+	imageset := &hivev1.ClusterImageSet{}
+	if err := yaml.Unmarshal(file, imageset); err != nil {
+		return nil, err
 	}
 
-	oClusterset := &hivev1.ClusterImageSet{}
-	err := r.client.Get(context.TODO(), client.ObjectKeyFromObject(clusterset), oClusterset)
+	oImageset := &hivev1.ClusterImageSet{}
+	err := r.client.Get(context.TODO(), client.ObjectKeyFromObject(imageset), oImageset)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			err = r.createClusterImageSet(clusterset)
+			err = r.createClusterImageSet(imageset)
 		} else {
-			r.log.Error(err, "failed to apply resource with error:")
+			r.log.Info("failed to create cluster imageset")
 		}
 	} else {
-		r.log.Info(fmt.Sprintf("cluster imageset(%v) already exists, skipping", clusterset.GetName()))
+		r.log.V(2).Info(fmt.Sprintf("cluster imageset(%v) already exists, skipping", imageset.GetName()))
+		imageset = oImageset
 	}
 
-	return err
+	return imageset, err
 }
 
 func (r *ImageSetController) createClusterImageSet(imageset *hivev1.ClusterImageSet) error {
@@ -262,12 +279,39 @@ func (r *ImageSetController) createClusterImageSet(imageset *hivev1.ClusterImage
 }
 
 func (r *ImageSetController) updateClusterImageSet(oImageset, imageset *hivev1.ClusterImageSet) error {
-
 	oImageset.Spec = imageset.Spec
 	r.log.V(2).Info(fmt.Sprintf("update cluster imageset: %v", oImageset))
 
 	if err := r.client.Update(context.TODO(), oImageset); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func (r *ImageSetController) cleanupClusterImages(currentImageSetList []string) error {
+	r.log.Info("cleanup old cluster imagesets")
+
+	imageSets := &hivev1.ClusterImageSetList{}
+	err := r.client.List(context.TODO(), imageSets, &client.ListOptions{})
+	if err != nil {
+		r.log.Error(err, "failed to list cluster imageset")
+		return err
+	}
+
+	if len(imageSets.Items) > 0 {
+		sort.Strings(currentImageSetList)
+
+		for _, imageSet := range imageSets.Items {
+			i := sort.SearchStrings(currentImageSetList, imageSet.GetName())
+			if i >= len(currentImageSetList) || currentImageSetList[i] != imageSet.GetName() {
+				r.log.Info(fmt.Sprintf("deleting cluster imageset: %v", imageSet.GetName()))
+				if err := r.client.Delete(context.TODO(), &imageSet); err != nil {
+					r.log.Info(fmt.Sprintf("failed to delete cluster imageset: %v", imageSet.GetName()))
+					return err
+				}
+			}
+		}
 	}
 
 	return nil
