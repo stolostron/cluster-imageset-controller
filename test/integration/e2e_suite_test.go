@@ -63,7 +63,7 @@ var _ = ginkgo.BeforeSuite(func() {
 	testEnv = &envtest.Environment{
 		ErrorIfCRDPathMissing: true,
 		CRDDirectoryPaths: []string{
-			filepath.Join(".", "externalcrds"),
+			filepath.Join(".", "..", "..", "hack", "test"),
 		},
 	}
 	cfg, err := testEnv.Start()
@@ -94,7 +94,7 @@ var _ = ginkgo.BeforeSuite(func() {
 	restMapper, err := apiutil.NewDynamicRESTMapper(restConfig, apiutil.WithLazyDiscovery)
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-	iCtrl := imagesetcontroller.NewImageSetController(mgr.GetClient(), restMapper, options)
+	iCtrl := imagesetcontroller.NewClusterImageSetController(mgr.GetClient(), restMapper, options)
 	err = mgr.Add(iCtrl)
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 

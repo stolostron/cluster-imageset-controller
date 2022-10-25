@@ -38,7 +38,7 @@ func TestSyncImageSet(t *testing.T) {
 	c := initClient()
 
 	options.GitRepository = "badurl"
-	iCtrl := NewImageSetController(c, restMapper, options)
+	iCtrl := NewClusterImageSetController(c, restMapper, options)
 	err = iCtrl.syncImageSet(true)
 	g.Expect(err).To(gomega.HaveOccurred())
 
@@ -55,7 +55,7 @@ func TestSyncImageSet(t *testing.T) {
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 
 	options.GitRepository = "https://github.com/stolostron/acm-hive-openshift-releases.git"
-	iCtrl = NewImageSetController(c, restMapper, options)
+	iCtrl = NewClusterImageSetController(c, restMapper, options)
 	err = iCtrl.syncImageSet(true)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 
@@ -165,7 +165,7 @@ func TestSyncCommand(t *testing.T) {
 	g.Expect("sync").To(gomega.Equal(syncCmd.Use))
 }
 
-func getImageSetController() (*ImageSetController, error) {
+func getImageSetController() (*ClusterImageSetController, error) {
 	restMapper, err := apiutil.NewDynamicRESTMapper(cfg, apiutil.WithLazyDiscovery)
 	if err != nil {
 		return nil, err
@@ -182,7 +182,7 @@ func getImageSetController() (*ImageSetController, error) {
 	}
 
 	client := initClient()
-	return NewImageSetController(client, restMapper, options), nil
+	return NewClusterImageSetController(client, restMapper, options), nil
 }
 
 func initClient() client.Client {

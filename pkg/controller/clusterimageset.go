@@ -46,7 +46,7 @@ func NewSyncImagesetCommand(logger logr.Logger) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "sync",
-		Short: "Start controller to sync cluster imagesets from a Git repository",
+		Short: "Start controller to sync the clusterImageSets from a Git repository",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return o.runControllerManager(ctx, nil)
 		},
@@ -80,11 +80,11 @@ func (o *ImagesetOptions) AddFlags(cmd *cobra.Command) {
 	flags := cmd.Flags()
 	// This command only supports reading from config
 	flags.IntVar(&o.Interval, "sync-interval", 60,
-		"Interval in seconds when cluster imagesets are sync with the Git repository.")
-	flags.StringVar(&o.GitRepository, "git-repository", "https://github.com/stolostron/acm-hive-openshift-releases.git", "Git repository to sync the cluster imagesets from.")
+		"Interval in seconds when clusterImageSets are synced with the Git repository.")
+	flags.StringVar(&o.GitRepository, "git-repository", "https://github.com/stolostron/acm-hive-openshift-releases.git", "Git repository to sync the clusterImageSets from.")
 	flags.StringVar(&o.GitBranch, "git-branch", "release-2.6", "Branch of the Git repository.")
 	flags.StringVar(&o.GitPath, "git-path", "clusterImageSets", "Path in the Git repository.")
-	flags.StringVar(&o.Channel, "channel", "fast", "Name of channel to sync cluster imagesets from.")
+	flags.StringVar(&o.Channel, "channel", "fast", "Name of channel to sync clusterImageSets from.")
 	flags.StringVar(&o.MetricAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flags.StringVar(&o.ProbeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 
@@ -115,7 +115,7 @@ func (o *ImagesetOptions) runControllerManager(ctx context.Context, mgr manager.
 		return err
 	}
 
-	iCtrl := NewImageSetController(mgr.GetClient(), restMapper, o)
+	iCtrl := NewClusterImageSetController(mgr.GetClient(), restMapper, o)
 	if err := mgr.Add(iCtrl); err != nil {
 		return err
 	}
@@ -132,7 +132,7 @@ func (o *ImagesetOptions) runControllerManager(ctx context.Context, mgr manager.
 	return mgr.Start(ctrl.SetupSignalHandler())
 }
 
-type ImageSetController struct {
+type ClusterImageSetController struct {
 	client        client.Client
 	restMapper    meta.RESTMapper
 	log           logr.Logger
@@ -143,8 +143,8 @@ type ImageSetController struct {
 	gitPath       string
 }
 
-func NewImageSetController(c client.Client, r meta.RESTMapper, o *ImagesetOptions) *ImageSetController {
-	return &ImageSetController{
+func NewClusterImageSetController(c client.Client, r meta.RESTMapper, o *ImagesetOptions) *ClusterImageSetController {
+	return &ClusterImageSetController{
 		client:        c,
 		restMapper:    r,
 		log:           o.Log,
@@ -156,13 +156,13 @@ func NewImageSetController(c client.Client, r meta.RESTMapper, o *ImagesetOption
 	}
 }
 
-func (r *ImageSetController) Start(ctx context.Context) error {
+func (r *ClusterImageSetController) Start(ctx context.Context) error {
 	cleanup := true
 
 	go wait.Until(func() {
 		err := r.syncImageSet(cleanup)
 		if err != nil {
-			r.log.Error(err, "error syncing cluster imagesets")
+			r.log.Error(err, "error syncing clusterImageSets")
 		}
 
 		cleanup = false // Perform cleanup on first run only
@@ -171,8 +171,8 @@ func (r *ImageSetController) Start(ctx context.Context) error {
 	return nil
 }
 
-func (r *ImageSetController) syncImageSet(cleanup bool) error {
-	r.log.Info("sync cluster imageset")
+func (r *ClusterImageSetController) syncImageSet(cleanup bool) error {
+	r.log.Info("sync clusterImageSet")
 
 	tempDir, err := ioutil.TempDir(os.TempDir(), "cluster-imageset-")
 	if err != nil {
@@ -199,7 +199,7 @@ func (r *ImageSetController) syncImageSet(cleanup bool) error {
 	return nil
 }
 
-func (r *ImageSetController) cloneGitRepo(destDir string) error {
+func (r *ClusterImageSetController) cloneGitRepo(destDir string) error {
 	r.log.Info(fmt.Sprintf("cloning Git repository:%s, branch:%v to directory:%s", r.gitRepository, r.gitBranch, destDir))
 
 	options := &git.CloneOptions{
@@ -211,30 +211,29 @@ func (r *ImageSetController) cloneGitRepo(destDir string) error {
 
 	_, err := git.PlainClone(destDir, false, options)
 	if err != nil {
-		r.log.Error(err, "failed to clone the Git repo")
 		return err
 	}
 
 	return nil
 }
 
-func (r *ImageSetController) applyImageSetsFromClonedGitRepo(destDir string) ([]string, error) {
+func (r *ClusterImageSetController) applyImageSetsFromClonedGitRepo(destDir string) ([]string, error) {
 	imageSetList := []string{}
 	resourcePath := filepath.Join(destDir, r.gitPath, r.channel)
-	r.log.Info(fmt.Sprintf("applying cluster imagesets from path: %v", resourcePath))
+	r.log.Info(fmt.Sprintf("applying clusterImageSets from path: %v", resourcePath))
 
 	err := filepath.Walk(resourcePath,
 		func(path string, info os.FileInfo, err error) error {
 			if !info.IsDir() {
 				file, err := ioutil.ReadFile(path)
 				if err != nil {
-					r.log.Error(err, "failed to read cluster imageset file: "+path)
+					r.log.Info("failed to read clusterImageSet file: " + path)
 					return err
 				}
 
 				imageset, err := r.applyClusterImageSetFile(file)
 				if err != nil {
-					r.log.Error(err, "failed to apply cluster imageset file:"+path)
+					r.log.Info("failed to apply clusterImageSet file:" + path)
 					return err
 				}
 				imageSetList = append(imageSetList, imageset.GetName())
@@ -246,7 +245,7 @@ func (r *ImageSetController) applyImageSetsFromClonedGitRepo(destDir string) ([]
 	return imageSetList, err
 }
 
-func (r *ImageSetController) applyClusterImageSetFile(file []byte) (*hivev1.ClusterImageSet, error) {
+func (r *ClusterImageSetController) applyClusterImageSetFile(file []byte) (*hivev1.ClusterImageSet, error) {
 	imageset := &hivev1.ClusterImageSet{}
 	if err := yaml.Unmarshal(file, imageset); err != nil {
 		return nil, err
@@ -258,18 +257,18 @@ func (r *ImageSetController) applyClusterImageSetFile(file []byte) (*hivev1.Clus
 		if errors.IsNotFound(err) {
 			err = r.createClusterImageSet(imageset)
 		} else {
-			r.log.Info("failed to create cluster imageset")
+			r.log.Info("failed to create clusterImageSet")
 		}
 	} else {
-		r.log.V(2).Info(fmt.Sprintf("cluster imageset(%v) already exists, skipping", imageset.GetName()))
+		r.log.V(2).Info(fmt.Sprintf("clusterImageSet(%v) already exists, skipping", imageset.GetName()))
 		imageset = oImageset
 	}
 
 	return imageset, err
 }
 
-func (r *ImageSetController) createClusterImageSet(imageset *hivev1.ClusterImageSet) error {
-	r.log.Info(fmt.Sprintf("create cluster imageset: %v", imageset))
+func (r *ClusterImageSetController) createClusterImageSet(imageset *hivev1.ClusterImageSet) error {
+	r.log.Info(fmt.Sprintf("create clusterImageSet: %v", imageset))
 
 	if err := r.client.Create(context.TODO(), imageset); err != nil {
 		return err
@@ -278,9 +277,9 @@ func (r *ImageSetController) createClusterImageSet(imageset *hivev1.ClusterImage
 	return nil
 }
 
-func (r *ImageSetController) updateClusterImageSet(oImageset, imageset *hivev1.ClusterImageSet) error {
+func (r *ClusterImageSetController) updateClusterImageSet(oImageset, imageset *hivev1.ClusterImageSet) error {
 	oImageset.Spec = imageset.Spec
-	r.log.V(2).Info(fmt.Sprintf("update cluster imageset: %v", oImageset))
+	r.log.V(2).Info(fmt.Sprintf("update clusterImageSet: %v", oImageset))
 
 	if err := r.client.Update(context.TODO(), oImageset); err != nil {
 		return err
@@ -289,13 +288,12 @@ func (r *ImageSetController) updateClusterImageSet(oImageset, imageset *hivev1.C
 	return nil
 }
 
-func (r *ImageSetController) cleanupClusterImages(currentImageSetList []string) error {
-	r.log.Info("cleanup old cluster imagesets")
+func (r *ClusterImageSetController) cleanupClusterImages(currentImageSetList []string) error {
+	r.log.Info("cleanup old clusterImageSets")
 
 	imageSets := &hivev1.ClusterImageSetList{}
 	err := r.client.List(context.TODO(), imageSets, &client.ListOptions{})
 	if err != nil {
-		r.log.Error(err, "failed to list cluster imageset")
 		return err
 	}
 
@@ -305,9 +303,9 @@ func (r *ImageSetController) cleanupClusterImages(currentImageSetList []string) 
 		for _, imageSet := range imageSets.Items {
 			i := sort.SearchStrings(currentImageSetList, imageSet.GetName())
 			if i >= len(currentImageSetList) || currentImageSetList[i] != imageSet.GetName() {
-				r.log.Info(fmt.Sprintf("deleting cluster imageset: %v", imageSet.GetName()))
+				r.log.Info(fmt.Sprintf("deleting clusterImageSet: %v", imageSet.GetName()))
 				if err := r.client.Delete(context.TODO(), &imageSet); err != nil {
-					r.log.Info(fmt.Sprintf("failed to delete cluster imageset: %v", imageSet.GetName()))
+					r.log.Info(fmt.Sprintf("failed to delete clusterImageSet: %v", imageSet.GetName()))
 					return err
 				}
 			}

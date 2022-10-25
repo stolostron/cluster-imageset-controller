@@ -67,7 +67,7 @@ vendor:
 
 .PHONY: build
 build: vendor fmt vet ## Build manager binary.
-	GOFLAGS="" go build -o bin/imageset cmd/main.go
+	GOFLAGS="" go build -o bin/clusterimageset cmd/main.go
 
 .PHONY: run
 run: fmt vet ## Run a controller from your host.

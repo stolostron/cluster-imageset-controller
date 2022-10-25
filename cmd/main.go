@@ -44,8 +44,8 @@ func main() {
 
 func newCommand(logger logr.Logger) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "imageset",
-		Short: "cluster imageset controller for acm.",
+		Use:   "clusterimageset",
+		Short: "cluster-image-set controller for MCE/ACM.",
 		Run: func(cmd *cobra.Command, args []string) {
 			if err := cmd.Help(); err != nil {
 				fmt.Fprintf(os.Stderr, "%v\n", err)
@@ -60,7 +60,7 @@ func newCommand(logger logr.Logger) *cobra.Command {
 		cmd.Version = v
 	}
 
-	cmd.AddCommand(imageset.NewSyncImagesetCommand(logger.WithName("cluster-imageset-controller")))
+	cmd.AddCommand(imageset.NewSyncImagesetCommand(logger.WithName("cluster-image-set-controller")))
 
 	return cmd
 }
