@@ -9,6 +9,7 @@ import (
 	"github.com/go-logr/zapr"
 	"github.com/onsi/gomega"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
+	"github.com/stolostron/cluster-imageset-controller/test/integration/util"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -42,7 +43,7 @@ func TestSyncImageSet(t *testing.T) {
 	err = iCtrl.syncImageSet(true)
 	g.Expect(err).To(gomega.HaveOccurred())
 
-	// Create dummy cluster imageset that will be deleted by cleanup routine
+	// Create dummy cluster imageset that will NOT be deleted by cleanup routine
 	cis := &hivev1.ClusterImageSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "dummy-img4.11.0-x86-64-appsub",
@@ -52,6 +53,19 @@ func TestSyncImageSet(t *testing.T) {
 		},
 	}
 	err = c.Create(context.TODO(), cis)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+
+	// Create dummy cluster imageset that will be deleted by cleanup routine
+	cis2 := &hivev1.ClusterImageSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "dummy2-img4.11.0-x86-64-appsub",
+		},
+		Spec: hivev1.ClusterImageSetSpec{
+			ReleaseImage: "quay.io/openshift-release-dev/ocp-release:4.11.0-x86_64-0",
+		},
+	}
+	cis2.SetLabels(map[string]string{util.ChannelLabel: "fast"})
+	err = c.Create(context.TODO(), cis2)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 
 	options.GitRepository = "https://github.com/stolostron/acm-hive-openshift-releases.git"
@@ -64,8 +78,12 @@ func TestSyncImageSet(t *testing.T) {
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	g.Expect(imagesetList.Items).Should(gomega.ContainElements())
 
-	// Dummy imageset should be deleted
+	// Dummy imageset should NOT be deleted
 	err = c.Get(context.TODO(), client.ObjectKeyFromObject(cis), cis)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+
+	// Dummy imageset should be deleted
+	err = c.Get(context.TODO(), client.ObjectKeyFromObject(cis2), cis2)
 	g.Expect(err).To(gomega.HaveOccurred())
 	g.Expect(errors.IsNotFound(err)).To(gomega.BeTrue())
 }

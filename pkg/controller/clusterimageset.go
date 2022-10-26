@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ghodss/yaml"
+	"github.com/stolostron/cluster-imageset-controller/test/integration/util"
 	"gopkg.in/src-d/go-git.v4"
 	"gopkg.in/src-d/go-git.v4/plumbing"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -301,9 +302,16 @@ func (r *ClusterImageSetController) cleanupClusterImages(currentImageSetList []s
 		sort.Strings(currentImageSetList)
 
 		for _, imageSet := range imageSets.Items {
+			// Ignore customer's cluster imagesets (without channel label)
+			channel, ok := imageSet.GetLabels()[util.ChannelLabel]
+			if !ok || channel == "" {
+				continue
+			}
+
 			i := sort.SearchStrings(currentImageSetList, imageSet.GetName())
 			if i >= len(currentImageSetList) || currentImageSetList[i] != imageSet.GetName() {
 				r.log.Info(fmt.Sprintf("deleting clusterImageSet: %v", imageSet.GetName()))
+
 				if err := r.client.Delete(context.TODO(), &imageSet); err != nil {
 					r.log.Info(fmt.Sprintf("failed to delete clusterImageSet: %v", imageSet.GetName()))
 					return err

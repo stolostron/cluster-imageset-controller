@@ -15,6 +15,7 @@ import (
 )
 
 const (
+	ChannelLabel      = "channel"
 	kubeConfigFileEnv = "KUBECONFIG"
 )
 
