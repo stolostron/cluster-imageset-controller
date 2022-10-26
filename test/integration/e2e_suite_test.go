@@ -20,7 +20,6 @@ import (
 
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	imagesetcontroller "github.com/stolostron/cluster-imageset-controller/pkg/controller"
-	"github.com/stolostron/cluster-imageset-controller/test/integration/util"
 )
 
 const (
@@ -56,9 +55,6 @@ var _ = ginkgo.BeforeSuite(func() {
 
 	var err error
 
-	dynamicClient, err = util.NewDynamicClient()
-	gomega.Expect(err).ToNot(gomega.HaveOccurred())
-
 	// install CRDs and start a local kube-apiserver
 	testEnv = &envtest.Environment{
 		ErrorIfCRDPathMissing: true,
@@ -81,6 +77,9 @@ var _ = ginkgo.BeforeSuite(func() {
 		LeaderElectionID:       "dfe33d85.open-cluster-management.io",
 	})
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+	dynamicClient, err = dynamic.NewForConfig(restConfig)
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 	zapLog, _ := zap.NewDevelopment()
 	options := &imagesetcontroller.ImagesetOptions{
