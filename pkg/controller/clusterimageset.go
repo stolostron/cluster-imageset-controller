@@ -21,6 +21,7 @@ import (
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -35,8 +36,8 @@ var (
 )
 
 func init() {
-	clientgoscheme.AddToScheme(scheme)
-	hivev1.AddToScheme(scheme)
+	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+	utilruntime.Must(hivev1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
