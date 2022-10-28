@@ -226,6 +226,7 @@ func (r *ClusterImageSetController) applyImageSetsFromClonedGitRepo(destDir stri
 	err := filepath.Walk(resourcePath,
 		func(path string, info os.FileInfo, err error) error {
 			if !info.IsDir() {
+				path = filepath.Clean(path)
 				file, err := ioutil.ReadFile(path)
 				if err != nil {
 					r.log.Info("failed to read clusterImageSet file: " + path)
@@ -312,7 +313,8 @@ func (r *ClusterImageSetController) cleanupClusterImages(currentImageSetList []s
 			if i >= len(currentImageSetList) || currentImageSetList[i] != imageSet.GetName() {
 				r.log.Info(fmt.Sprintf("deleting clusterImageSet: %v", imageSet.GetName()))
 
-				if err := r.client.Delete(context.TODO(), &imageSet); err != nil {
+				delImageSet := imageSet.DeepCopy()
+				if err := r.client.Delete(context.TODO(), delImageSet); err != nil {
 					r.log.Info(fmt.Sprintf("failed to delete clusterImageSet: %v", imageSet.GetName()))
 					return err
 				}
