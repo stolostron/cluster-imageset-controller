@@ -226,8 +226,7 @@ func (r *ClusterImageSetController) applyImageSetsFromClonedGitRepo(destDir stri
 	err := filepath.Walk(resourcePath,
 		func(path string, info os.FileInfo, err error) error {
 			if !info.IsDir() {
-				path = filepath.Clean(path)
-				file, err := ioutil.ReadFile(path)
+				file, err := ioutil.ReadFile(filepath.Clean(path))
 				if err != nil {
 					r.log.Info("failed to read clusterImageSet file: " + path)
 					return err
