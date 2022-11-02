@@ -1,4 +1,4 @@
-package imageset
+package clusterimageset
 
 import (
 	"context"
@@ -12,8 +12,6 @@ import (
 
 	"github.com/ghodss/yaml"
 	"github.com/stolostron/cluster-imageset-controller/test/integration/util"
-	"gopkg.in/src-d/go-git.v4"
-	"gopkg.in/src-d/go-git.v4/plumbing"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 
@@ -63,14 +61,12 @@ func NewSyncImagesetCommand(logger logr.Logger) *cobra.Command {
 
 // AgentOptions defines the flags for workload agent
 type ImagesetOptions struct {
-	Log           logr.Logger
-	MetricAddr    string
-	ProbeAddr     string
-	Interval      int
-	GitRepository string
-	GitBranch     string
-	GitPath       string
-	Channel       string
+	Log        logr.Logger
+	MetricAddr string
+	ProbeAddr  string
+	Interval   int
+	ConfigMap  string
+	Secret     string
 }
 
 // NewWorkloadAgentOptions returns the flags with default value set
@@ -83,10 +79,8 @@ func (o *ImagesetOptions) AddFlags(cmd *cobra.Command) {
 	// This command only supports reading from config
 	flags.IntVar(&o.Interval, "sync-interval", 60,
 		"Interval in seconds when clusterImageSets are synced with the Git repository.")
-	flags.StringVar(&o.GitRepository, "git-repository", "https://github.com/stolostron/acm-hive-openshift-releases.git", "Git repository to sync the clusterImageSets from.")
-	flags.StringVar(&o.GitBranch, "git-branch", "release-2.6", "Branch of the Git repository.")
-	flags.StringVar(&o.GitPath, "git-path", "clusterImageSets", "Path in the Git repository.")
-	flags.StringVar(&o.Channel, "channel", "fast", "Name of channel to sync clusterImageSets from.")
+	flags.StringVar(&o.ConfigMap, "git-configmap", "cluster-image-set-git-repo", "Configuration info to access the clusterImageSet Git repository.")
+	flags.StringVar(&o.Secret, "git-secret", "cluster-image-set-git-repo", "Authentication info to access the clusterImageSet Git repository.")
 	flags.StringVar(&o.MetricAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flags.StringVar(&o.ProbeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 
@@ -135,26 +129,23 @@ func (o *ImagesetOptions) runControllerManager(ctx context.Context, mgr manager.
 }
 
 type ClusterImageSetController struct {
-	client        client.Client
-	restMapper    meta.RESTMapper
-	log           logr.Logger
-	interval      int
-	channel       string
-	gitRepository string
-	gitBranch     string
-	gitPath       string
+	client       client.Client
+	restMapper   meta.RESTMapper
+	log          logr.Logger
+	interval     int
+	configMap    string
+	secret       string
+	lastCommitID string
 }
 
 func NewClusterImageSetController(c client.Client, r meta.RESTMapper, o *ImagesetOptions) *ClusterImageSetController {
 	return &ClusterImageSetController{
-		client:        c,
-		restMapper:    r,
-		log:           o.Log,
-		channel:       o.Channel,
-		interval:      o.Interval,
-		gitRepository: o.GitRepository,
-		gitBranch:     o.GitBranch,
-		gitPath:       o.GitPath,
+		client:     c,
+		restMapper: r,
+		log:        o.Log,
+		interval:   o.Interval,
+		configMap:  o.ConfigMap,
+		secret:     o.Secret,
 	}
 }
 
@@ -162,7 +153,7 @@ func (r *ClusterImageSetController) Start(ctx context.Context) error {
 	cleanup := true
 
 	go wait.Until(func() {
-		err := r.syncImageSet(cleanup)
+		err := r.syncClusterImageSet(cleanup)
 		if err != nil {
 			r.log.Error(err, "error syncing clusterImageSets")
 		}
@@ -173,8 +164,22 @@ func (r *ClusterImageSetController) Start(ctx context.Context) error {
 	return nil
 }
 
-func (r *ClusterImageSetController) syncImageSet(cleanup bool) error {
-	r.log.Info("sync clusterImageSet")
+func (r *ClusterImageSetController) syncClusterImageSet(cleanup bool) error {
+	r.log.Info("start syncClusterImageSet")
+	defer r.log.Info("done syncClusterImageSet")
+
+	// Check if the last commit ID is different since the previous sync
+	if r.lastCommitID != "" {
+		lastCommitID, err := r.getLastCommitID()
+		if err != nil {
+			return err
+		}
+
+		if r.lastCommitID == lastCommitID {
+			r.log.Info(fmt.Sprintf("previous commit %v is already the most recent, skip sync", lastCommitID))
+			return nil
+		}
+	}
 
 	tempDir, err := ioutil.TempDir(os.TempDir(), "cluster-imageset-")
 	if err != nil {
@@ -182,7 +187,8 @@ func (r *ClusterImageSetController) syncImageSet(cleanup bool) error {
 	}
 	defer os.RemoveAll(tempDir)
 
-	if err := r.cloneGitRepo(tempDir); err != nil {
+	repo, err := r.cloneGitRepo(tempDir, false)
+	if err != nil {
 		return err
 	}
 
@@ -198,33 +204,32 @@ func (r *ClusterImageSetController) syncImageSet(cleanup bool) error {
 		}
 	}
 
-	return nil
-}
-
-func (r *ClusterImageSetController) cloneGitRepo(destDir string) error {
-	r.log.Info(fmt.Sprintf("cloning Git repository:%s, branch:%v to directory:%s", r.gitRepository, r.gitBranch, destDir))
-
-	options := &git.CloneOptions{
-		URL:               r.gitRepository,
-		SingleBranch:      true,
-		RecurseSubmodules: git.DefaultSubmoduleRecursionDepth,
-		ReferenceName:     plumbing.NewBranchReferenceName(r.gitBranch),
-	}
-
-	_, err := git.PlainClone(destDir, false, options)
+	// Update lastCommitID
+	ref, err := repo.Head()
 	if err != nil {
 		return err
 	}
+	commit, err := repo.CommitObject(ref.Hash())
+	if err != nil {
+		return err
+	}
+	r.lastCommitID = commit.ID().String()
 
 	return nil
 }
 
 func (r *ClusterImageSetController) applyImageSetsFromClonedGitRepo(destDir string) ([]string, error) {
 	imageSetList := []string{}
-	resourcePath := filepath.Join(destDir, r.gitPath, r.channel)
+
+	_, _, gitRepoPath, channel, _, _, err := r.getGitRepoConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	resourcePath := filepath.Join(destDir, gitRepoPath, channel)
 	r.log.Info(fmt.Sprintf("applying clusterImageSets from path: %v", resourcePath))
 
-	err := filepath.Walk(resourcePath,
+	err = filepath.Walk(resourcePath,
 		func(path string, info os.FileInfo, err error) error {
 			if !info.IsDir() {
 				file, err := ioutil.ReadFile(filepath.Clean(path))

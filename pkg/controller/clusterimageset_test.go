@@ -1,4 +1,4 @@
-package imageset
+package clusterimageset
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	"github.com/stolostron/cluster-imageset-controller/test/integration/util"
 	"go.uber.org/zap"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -28,19 +29,20 @@ func TestSyncImageSet(t *testing.T) {
 
 	zapLog, _ := zap.NewDevelopment()
 	options := &ImagesetOptions{
-		Log:           zapr.NewLogger(zapLog),
-		Interval:      60,
-		GitRepository: "https://github.com/stolostron/acm-hive-openshift-releases.git",
-		GitBranch:     "release-2.6",
-		GitPath:       "clusterImageSets",
-		Channel:       "fast",
+		Log:       zapr.NewLogger(zapLog),
+		Interval:  60,
+		ConfigMap: "cluster-image-set-git-repo",
 	}
 
 	c := initClient()
 
-	options.GitRepository = "badurl"
 	iCtrl := NewClusterImageSetController(c, restMapper, options)
-	err = iCtrl.syncImageSet(true)
+
+	configMap := getConfigMap("badurl", "release-2.6", "clusterImageSets", "fast")
+	err = c.Create(context.TODO(), configMap)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+
+	err = iCtrl.syncClusterImageSet(true)
 	g.Expect(err).To(gomega.HaveOccurred())
 
 	// Create dummy cluster imageset that will NOT be deleted by cleanup routine
@@ -55,7 +57,7 @@ func TestSyncImageSet(t *testing.T) {
 	err = c.Create(context.TODO(), cis)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 
-	// Create dummy cluster imageset that will be deleted by cleanup routine
+	// Create dummy cluster imageset with channel label that will be deleted by cleanup routine
 	cis2 := &hivev1.ClusterImageSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "dummy2-img4.11.0-x86-64-appsub",
@@ -68,9 +70,13 @@ func TestSyncImageSet(t *testing.T) {
 	err = c.Create(context.TODO(), cis2)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 
-	options.GitRepository = "https://github.com/stolostron/acm-hive-openshift-releases.git"
+	// Create configmap with valid url
+	err = c.Delete(context.TODO(), configMap)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+
 	iCtrl = NewClusterImageSetController(c, restMapper, options)
-	err = iCtrl.syncImageSet(true)
+	iCtrl.lastCommitID = "fakeCommit"
+	err = iCtrl.syncClusterImageSet(true)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 
 	imagesetList := &hivev1.ClusterImageSetList{}
@@ -93,12 +99,9 @@ func TestSetupImageSetController(t *testing.T) {
 
 	zapLog, _ := zap.NewDevelopment()
 	options := &ImagesetOptions{
-		Log:           zapr.NewLogger(zapLog),
-		Interval:      60,
-		GitRepository: "https://github.com/stolostron/acm-hive-openshift-releases.git",
-		GitBranch:     "release-2.6",
-		GitPath:       "clusterImageSets",
-		Channel:       "fast",
+		Log:       zapr.NewLogger(zapLog),
+		Interval:  60,
+		ConfigMap: "cluster-image-set-git-repo",
 	}
 
 	mgr, err := manager.New(cfg, manager.Options{})
@@ -191,16 +194,49 @@ func getImageSetController() (*ClusterImageSetController, error) {
 
 	zapLog, _ := zap.NewDevelopment()
 	options := &ImagesetOptions{
-		Log:           zapr.NewLogger(zapLog),
-		Interval:      60,
-		GitRepository: "https://github.com/stolostron/acm-hive-openshift-releases.git",
-		GitBranch:     "release-2.6",
-		GitPath:       "clusterImageSets",
-		Channel:       "fast",
+		Log:       zapr.NewLogger(zapLog),
+		Interval:  60,
+		ConfigMap: "cluster-image-set-git-repo",
 	}
 
 	client := initClient()
 	return NewClusterImageSetController(client, restMapper, options), nil
+}
+
+func getConfigMap(gitRepoUrl, gitRepoBranch, gitRepoPath, channel string) *corev1.ConfigMap {
+	data := map[string]string{
+		"gitRepoUrl":    gitRepoUrl,
+		"gitRepoBranch": gitRepoBranch,
+		"gitRepoPath":   gitRepoPath,
+		"channel":       channel,
+	}
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cluster-image-set-git-repo",
+			Namespace: "open-cluster-management",
+		},
+		Data: data,
+	}
+}
+
+func getDefaultConfigMap() *corev1.ConfigMap {
+	return getConfigMap("https://github.com/stolostron/acm-hive-openshift-releases.git", "release-2.6", "clusterImageSets", "fast")
+}
+
+func getSecret(user, accessToken, key, cert []byte) *corev1.Secret {
+	data := map[string][]byte{
+		UserID:      user,
+		AccessToken: accessToken,
+		ClientKey:   key,
+		ClientCert:  cert,
+	}
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cluster-image-set-git-repo",
+			Namespace: "open-cluster-management",
+		},
+		Data: data,
+	}
 }
 
 func initClient() client.Client {
@@ -208,6 +244,7 @@ func initClient() client.Client {
 
 	metav1.AddMetaToScheme(scheme)
 	hivev1.AddToScheme(scheme)
+	corev1.AddToScheme(scheme)
 
 	ncb := fake.NewClientBuilder()
 	ncb.WithScheme(scheme)
