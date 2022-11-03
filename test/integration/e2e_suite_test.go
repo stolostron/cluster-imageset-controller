@@ -9,6 +9,8 @@ import (
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 	"go.uber.org/zap"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/dynamic"
@@ -83,18 +85,39 @@ var _ = ginkgo.BeforeSuite(func() {
 
 	zapLog, _ := zap.NewDevelopment()
 	options := &imagesetcontroller.ImagesetOptions{
-		Log:           zapr.NewLogger(zapLog),
-		Interval:      60,
-		GitRepository: "https://github.com/stolostron/acm-hive-openshift-releases.git",
-		GitBranch:     "release-2.6",
-		GitPath:       "clusterImageSets",
-		Channel:       "fast",
+		Log:       zapr.NewLogger(zapLog),
+		Interval:  60,
+		ConfigMap: "cluster-image-set-repo",
 	}
 	restMapper, err := apiutil.NewDynamicRESTMapper(restConfig, apiutil.WithLazyDiscovery)
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 	iCtrl := imagesetcontroller.NewClusterImageSetController(mgr.GetClient(), restMapper, options)
 	err = mgr.Add(iCtrl)
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "open-cluster-management",
+		},
+	}
+	err = mgr.GetClient().Create(context.TODO(), ns)
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
+	data := map[string]string{
+		"gitRepoUrl":    "https://github.com/stolostron/acm-hive-openshift-releases.git",
+		"gitRepoBranch": "release-2.6",
+		"gitRepoPath":   "clusterImageSets",
+		"channel":       "fast",
+	}
+	configMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cluster-image-set-repo",
+			Namespace: "open-cluster-management",
+		},
+		Data: data,
+	}
+	err = mgr.GetClient().Create(context.TODO(), configMap)
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 	go startCtrlManager(mgr)
