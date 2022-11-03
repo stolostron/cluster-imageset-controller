@@ -223,16 +223,21 @@ func getDefaultConfigMap() *corev1.ConfigMap {
 	return getConfigMap("https://github.com/stolostron/acm-hive-openshift-releases.git", "release-2.6", "clusterImageSets", "fast")
 }
 
-func getSecret(user, accessToken, key, cert []byte) *corev1.Secret {
+func getSecret(name string, user, accessToken, key, cert []byte) *corev1.Secret {
 	data := map[string][]byte{
 		UserID:      user,
 		AccessToken: accessToken,
 		ClientKey:   key,
 		ClientCert:  cert,
 	}
+
+	if name == "" {
+		name = "cluster-image-set-git-repo"
+	}
+
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "cluster-image-set-git-repo",
+			Name:      name,
 			Namespace: "open-cluster-management",
 		},
 		Data: data,
