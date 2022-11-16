@@ -42,7 +42,7 @@ const (
 
 	// Default values
 	DefaultGitRepoUrl    = "https://github.com/stolostron/acm-hive-openshift-releases.git"
-	DefaultGitRepoBranch = "release-2.6"
+	DefaultGitRepoBranch = "backplane-2.2"
 	DefaultGitRepoPath   = "clusterImageSets"
 	DefaultChannel       = "fast"
 )
