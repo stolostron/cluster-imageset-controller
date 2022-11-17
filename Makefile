@@ -62,7 +62,6 @@ test: fmt vet envtest ## Run tests.
 ##@ Build
 .PHONY: vendor
 vendor:
-	go mod tidy
 	go mod vendor
 
 .PHONY: build
