@@ -59,12 +59,6 @@ vet: ## Run go vet against code.
 test: fmt vet envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test $(shell go list ./... | grep -v /test/e2e) -coverprofile cover.out
 
-##@ Build
-.PHONY: vendor
-vendor:
-	go mod tidy
-	go mod vendor
-
 .PHONY: build
 build: vendor fmt vet ## Build manager binary.
 	GOFLAGS="" go build -o bin/clusterimageset cmd/main.go
