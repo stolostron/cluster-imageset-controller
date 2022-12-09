@@ -98,7 +98,7 @@ var _ = ginkgo.BeforeSuite(func() {
 
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "open-cluster-management",
+			Name: "multicluster-engine",
 		},
 	}
 	err = mgr.GetClient().Create(context.TODO(), ns)
@@ -113,7 +113,7 @@ var _ = ginkgo.BeforeSuite(func() {
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "cluster-image-set-repo",
-			Namespace: "open-cluster-management",
+			Namespace: "multicluster-engine",
 		},
 		Data: data,
 	}

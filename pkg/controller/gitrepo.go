@@ -198,7 +198,7 @@ func (r *ClusterImageSetController) getGitRepoAuthFromSecret() (string, string, 
 	clientCert := []byte("")
 
 	secret := &corev1.Secret{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: r.secret, Namespace: "open-cluster-management"}, secret)
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: r.secret, Namespace: getPodNamespace()}, secret)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return username, accessToken, clientKey, clientCert, nil
@@ -256,7 +256,7 @@ func getCertChain(certs string) tls.Certificate {
 
 func (r *ClusterImageSetController) getGitRepoConfig() (string, string, string, string, string, bool, error) {
 	configMap := &corev1.ConfigMap{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: r.configMap, Namespace: "open-cluster-management"}, configMap)
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: r.configMap, Namespace: getPodNamespace()}, configMap)
 	if err != nil {
 		r.log.Info(fmt.Sprintf("unable to get config map %v, use default values.", r.configMap))
 		return DefaultGitRepoUrl, DefaultGitRepoBranch, DefaultGitRepoPath, DefaultChannel, "", false, nil
@@ -294,4 +294,11 @@ func (r *ClusterImageSetController) getGitRepoConfig() (string, string, string, 
 	}
 
 	return gitRepoUrl, gitRepoBranch, gitRepoPath, channel, caCert, bSkipCertVerify, nil
+}
+
+func getPodNamespace() string {
+	if ns := os.Getenv("POD_NAMESPACE"); ns != "" {
+		return ns
+	}
+	return "multicluster-engine"
 }
