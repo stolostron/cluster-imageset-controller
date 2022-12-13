@@ -213,7 +213,7 @@ func getConfigMap(gitRepoUrl, gitRepoBranch, gitRepoPath, channel string) *corev
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "cluster-image-set-git-repo",
-			Namespace: "open-cluster-management",
+			Namespace: "multicluster-engine",
 		},
 		Data: data,
 	}
@@ -238,7 +238,7 @@ func getSecret(name string, user, accessToken, key, cert []byte) *corev1.Secret 
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: "open-cluster-management",
+			Namespace: "multicluster-engine",
 		},
 		Data: data,
 	}

@@ -4,7 +4,7 @@ The repository provides a controller that queries the Git repository https://git
 
 The acm-hive-openshift-releases Git repository has a cron job that runs every 3 hrs. This cron job queries the install image repository https://quay.io/repository/openshift-release-dev/ocp-release?tab=tags for the latest OpenShift images. A new clusterImageSet YAML is added to the acm-hive-openshift-releases Git repository when a new OpenShift image is discovered. The contents of the acm-hive-openshift-releases Git repository is organized using a directory structure to separate images based on the OCP version and the release channel (`fast/stable/candidate`). The branch of the Git repository is used to define the set of cluster imagesets that are applicable to a particular MCE/ACM release.
 
-By default, this controller synchronizes the clusterImageSets from the Git repository https://github.com/stolostron/acm-hive-openshift-releases, branch `release-2.6`, and using the `fast` channel. These default values could be overriden through properties in the configMap `cluster-image-set-git-repo` in the `open-cluster-management` namespace.
+By default, this controller synchronizes the clusterImageSets from the Git repository https://github.com/stolostron/acm-hive-openshift-releases, branch `backplane-2.2`, and using the `fast` channel. These default values could be overriden through properties in the configMap with the name `cluster-image-set-git-repo` that is created in the same namespace as the controller.
 
 This is a sample of the configMap YAML.
 
@@ -13,7 +13,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: cluster-image-set-git-repo
-  namespace: open-cluster-management
+  namespace: multicluster-engine
 data:
   gitRepoUrl: https://localhost:10880/p/testrepo2.git
   gitRepoBranch: release-2.6
@@ -36,8 +36,8 @@ Here is a sample of a secret that uses basic authentication:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: cluster-image-set-repo
-  namespace: open-cluster-management
+  name: cluster-image-set-git-repo
+  namespace: multicluster-engine
 type: Opaque
 data:
   user: cGhpbGlw
@@ -50,8 +50,8 @@ For authentication using HTTPS client certificates, a secret similar to this cou
 apiVersion: v1
 kind: Secret
 metadata:
-  name: cluster-image-set-repo
-  namespace: open-cluster-management
+  name: cluster-image-set-git-repo
+  namespace: multicluster-engine
 type: Opaque
 data:
   clientKey: key1
