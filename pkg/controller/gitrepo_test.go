@@ -8,7 +8,6 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
 	"go.uber.org/zap"
-	"k8s.io/apimachinery/pkg/api/meta"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -20,7 +19,6 @@ func TestGetGitRepoAuthFromSecret(t *testing.T) {
 
 	type ctrlFields struct {
 		client       client.Client
-		restMapper   meta.RESTMapper
 		log          logr.Logger
 		interval     int
 		configMap    string
@@ -67,7 +65,6 @@ func TestGetGitRepoAuthFromSecret(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			r := &ClusterImageSetController{
 				client:       tt.controllerFields.client,
-				restMapper:   tt.controllerFields.restMapper,
 				log:          tt.controllerFields.log,
 				interval:     tt.controllerFields.interval,
 				configMap:    tt.controllerFields.configMap,
@@ -211,7 +208,6 @@ func TestGetHTTPOptions(t *testing.T) {
 
 	type ctrlFields struct {
 		client       client.Client
-		restMapper   meta.RESTMapper
 		log          logr.Logger
 		interval     int
 		configMap    string
@@ -252,7 +248,6 @@ func TestGetHTTPOptions(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			r := &ClusterImageSetController{
 				client:       tt.controllerFields.client,
-				restMapper:   tt.controllerFields.restMapper,
 				log:          tt.controllerFields.log,
 				interval:     tt.controllerFields.interval,
 				configMap:    tt.controllerFields.configMap,

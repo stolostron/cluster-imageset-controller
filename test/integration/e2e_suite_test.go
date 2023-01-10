@@ -17,7 +17,6 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
@@ -25,7 +24,7 @@ import (
 )
 
 const (
-	eventuallyTimeout  = 60 // seconds
+	eventuallyTimeout  = 30 // seconds
 	eventuallyInterval = 1  // seconds
 )
 
@@ -89,19 +88,20 @@ var _ = ginkgo.BeforeSuite(func() {
 		Interval:  60,
 		ConfigMap: "cluster-image-set-repo",
 	}
-	restMapper, err := apiutil.NewDynamicRESTMapper(restConfig, apiutil.WithLazyDiscovery)
-	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-	iCtrl := imagesetcontroller.NewClusterImageSetController(mgr.GetClient(), restMapper, options)
-	err = mgr.Add(iCtrl)
-	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+	go startCtrlManager(mgr)
+
+	client := mgr.GetClient()
+
+	iCtrl := imagesetcontroller.NewClusterImageSetController(client, options)
+	iCtrl.Start()
 
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "multicluster-engine",
 		},
 	}
-	err = mgr.GetClient().Create(context.TODO(), ns)
+	err = client.Create(context.TODO(), ns)
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 	data := map[string]string{
@@ -117,10 +117,9 @@ var _ = ginkgo.BeforeSuite(func() {
 		},
 		Data: data,
 	}
-	err = mgr.GetClient().Create(context.TODO(), configMap)
+	err = client.Create(context.TODO(), configMap)
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-	go startCtrlManager(mgr)
 })
 
 var _ = ginkgo.AfterSuite(func() {
