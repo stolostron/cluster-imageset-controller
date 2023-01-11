@@ -16,16 +16,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
 func TestSyncImageSet(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
-
-	restMapper, err := apiutil.NewDynamicRESTMapper(cfg, apiutil.WithLazyDiscovery)
-	g.Expect(err).NotTo(gomega.HaveOccurred())
 
 	zapLog, _ := zap.NewDevelopment()
 	options := &ImagesetOptions{
@@ -36,10 +32,10 @@ func TestSyncImageSet(t *testing.T) {
 
 	c := initClient()
 
-	iCtrl := NewClusterImageSetController(c, restMapper, options)
+	iCtrl := NewClusterImageSetController(c, options)
 
 	configMap := getConfigMap("badurl", "release-2.6", "clusterImageSets", "fast")
-	err = c.Create(context.TODO(), configMap)
+	err := c.Create(context.TODO(), configMap)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 
 	err = iCtrl.syncClusterImageSet(true)
@@ -74,7 +70,7 @@ func TestSyncImageSet(t *testing.T) {
 	err = c.Delete(context.TODO(), configMap)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 
-	iCtrl = NewClusterImageSetController(c, restMapper, options)
+	iCtrl = NewClusterImageSetController(c, options)
 	iCtrl.lastCommitID = "fakeCommit"
 	err = iCtrl.syncClusterImageSet(true)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
@@ -187,11 +183,6 @@ func TestSyncCommand(t *testing.T) {
 }
 
 func getImageSetController() (*ClusterImageSetController, error) {
-	restMapper, err := apiutil.NewDynamicRESTMapper(cfg, apiutil.WithLazyDiscovery)
-	if err != nil {
-		return nil, err
-	}
-
 	zapLog, _ := zap.NewDevelopment()
 	options := &ImagesetOptions{
 		Log:       zapr.NewLogger(zapLog),
@@ -200,7 +191,7 @@ func getImageSetController() (*ClusterImageSetController, error) {
 	}
 
 	client := initClient()
-	return NewClusterImageSetController(client, restMapper, options), nil
+	return NewClusterImageSetController(client, options), nil
 }
 
 func getConfigMap(gitRepoUrl, gitRepoBranch, gitRepoPath, channel string) *corev1.ConfigMap {

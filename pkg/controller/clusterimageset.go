@@ -13,19 +13,16 @@ import (
 	"github.com/ghodss/yaml"
 	"github.com/stolostron/cluster-imageset-controller/test/integration/util"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 
 	"github.com/go-logr/logr"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	"github.com/spf13/cobra"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
-	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
@@ -34,7 +31,7 @@ var (
 )
 
 func init() {
-	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+	utilruntime.Must(corev1.AddToScheme(scheme))
 	utilruntime.Must(hivev1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
@@ -106,62 +103,64 @@ func (o *ImagesetOptions) runControllerManager(ctx context.Context, mgr manager.
 		}
 	}
 
-	restMapper, err := apiutil.NewDynamicRESTMapper(config, apiutil.WithLazyDiscovery)
+	client, err := client.New(mgr.GetConfig(), client.Options{Scheme: scheme})
 	if err != nil {
-		return err
+		o.Log.Error(err, "unable to create kube client.")
+		os.Exit(1)
 	}
+	iCtrl := NewClusterImageSetController(client, o)
 
-	iCtrl := NewClusterImageSetController(mgr.GetClient(), restMapper, o)
-	if err := mgr.Add(iCtrl); err != nil {
-		return err
-	}
+	iCtrl.Start()
 
 	o.Log.Info("starting manager")
-
-	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		return fmt.Errorf("unable to set up health check, err: %w", err)
-	}
-	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		return fmt.Errorf("unable to set up ready check, err: %w", err)
-	}
 
 	return mgr.Start(ctrl.SetupSignalHandler())
 }
 
 type ClusterImageSetController struct {
 	client       client.Client
-	restMapper   meta.RESTMapper
 	log          logr.Logger
+	stopch       chan struct{}
 	interval     int
 	configMap    string
 	secret       string
 	lastCommitID string
 }
 
-func NewClusterImageSetController(c client.Client, r meta.RESTMapper, o *ImagesetOptions) *ClusterImageSetController {
+func NewClusterImageSetController(c client.Client, o *ImagesetOptions) *ClusterImageSetController {
 	return &ClusterImageSetController{
-		client:     c,
-		restMapper: r,
-		log:        o.Log,
-		interval:   o.Interval,
-		configMap:  o.ConfigMap,
-		secret:     o.Secret,
+		client:    c,
+		log:       o.Log,
+		interval:  o.Interval,
+		configMap: o.ConfigMap,
+		secret:    o.Secret,
 	}
 }
 
-func (r *ClusterImageSetController) Start(ctx context.Context) error {
+func (r *ClusterImageSetController) Start() {
+	// do nothing if already started
+	if r.stopch != nil {
+		return
+	}
+
+	r.stopch = make(chan struct{})
+
 	cleanup := true
 
 	go wait.Until(func() {
 		err := r.syncClusterImageSet(cleanup)
 		if err != nil {
-			r.log.Error(err, "error syncing clusterImageSets")
+			fmt.Printf("error syncing clusterImageSets: %v", err.Error())
 		}
 
 		cleanup = false // Perform cleanup on first run only
-	}, time.Duration(r.interval)*time.Second, ctx.Done())
+	}, time.Duration(r.interval)*time.Second, r.stopch)
+}
 
-	return nil
+func (r *ClusterImageSetController) Stop() {
+	close(r.stopch)
+
+	r.stopch = nil
 }
 
 func (r *ClusterImageSetController) syncClusterImageSet(cleanup bool) error {
