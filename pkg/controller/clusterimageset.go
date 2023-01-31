@@ -266,8 +266,15 @@ func (r *ClusterImageSetController) applyClusterImageSetFile(file []byte) (*hive
 			r.log.Info("failed to create clusterImageSet")
 		}
 	} else {
-		r.log.V(2).Info(fmt.Sprintf("clusterImageSet(%v) already exists, skipping", imageset.GetName()))
-		imageset = oImageset
+		// Check if visible label and release image values changed
+		if oImageset.GetLabels()["visible"] != imageset.GetLabels()["visible"] ||
+			oImageset.Spec.ReleaseImage != imageset.Spec.ReleaseImage {
+
+			err = r.updateClusterImageSet(oImageset, imageset)
+		} else {
+			r.log.V(2).Info(fmt.Sprintf("clusterImageSet(%v) already exists, skipping", imageset.GetName()))
+			imageset = oImageset
+		}
 	}
 
 	return imageset, err
@@ -285,7 +292,8 @@ func (r *ClusterImageSetController) createClusterImageSet(imageset *hivev1.Clust
 
 func (r *ClusterImageSetController) updateClusterImageSet(oImageset, imageset *hivev1.ClusterImageSet) error {
 	oImageset.Spec = imageset.Spec
-	r.log.V(2).Info(fmt.Sprintf("update clusterImageSet: %v", oImageset))
+	oImageset.Labels = imageset.Labels
+	r.log.Info(fmt.Sprintf("update clusterImageSet: %v", oImageset))
 
 	if err := r.client.Update(context.TODO(), oImageset); err != nil {
 		return err

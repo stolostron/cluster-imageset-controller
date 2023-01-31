@@ -125,16 +125,30 @@ func TestApplyClusterImageSet(t *testing.T) {
 
 	cis := &hivev1.ClusterImageSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "img4.11.0-x86-64-appsub",
+			Name:   "img4.11.0-x86-64-appsub",
+			Labels: map[string]string{"visible": "true"},
 		},
 		Spec: hivev1.ClusterImageSetSpec{
 			ReleaseImage: "quay.io/openshift-release-dev/ocp-release:4.11.0-x86_64-0",
 		},
 	}
 
+	// ReleaseImage changed
 	cis2 := &hivev1.ClusterImageSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "img4.11.0-x86-64-appsub",
+			Name:   "img4.11.0-x86-64-appsub",
+			Labels: map[string]string{"visible": "true"},
+		},
+		Spec: hivev1.ClusterImageSetSpec{
+			ReleaseImage: "quay.io/openshift-release-dev/ocp-release:4.11.0-x86_64",
+		},
+	}
+
+	// Visible label changed
+	cis3 := &hivev1.ClusterImageSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "img4.11.0-x86-64-appsub",
+			Labels: map[string]string{"visible": "false"},
 		},
 		Spec: hivev1.ClusterImageSetSpec{
 			ReleaseImage: "quay.io/openshift-release-dev/ocp-release:4.11.0-x86_64",
@@ -151,7 +165,7 @@ func TestApplyClusterImageSet(t *testing.T) {
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	g.Expect(createdCis.Spec.ReleaseImage).To(gomega.Equal(cis.Spec.ReleaseImage))
 
-	// apply should be skipped since clusterset already exists
+	// apply should update cluster image set since release image changed
 	bCis2, err := yaml.Marshal(cis2)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 
@@ -159,14 +173,17 @@ func TestApplyClusterImageSet(t *testing.T) {
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	err = iCtrl.client.Get(context.TODO(), client.ObjectKeyFromObject(cis2), createdCis)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
-	g.Expect(createdCis.Spec.ReleaseImage).To(gomega.Equal(cis.Spec.ReleaseImage))
-
-	err = iCtrl.client.Get(context.TODO(), client.ObjectKeyFromObject(cis), cis)
-	err = iCtrl.updateClusterImageSet(cis, cis2)
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	err = iCtrl.client.Get(context.TODO(), client.ObjectKeyFromObject(cis), createdCis)
-	g.Expect(err).NotTo(gomega.HaveOccurred())
 	g.Expect(createdCis.Spec.ReleaseImage).To(gomega.Equal(cis2.Spec.ReleaseImage))
+
+	// apply should update cluster image set since visible label changed
+	bCis3, err := yaml.Marshal(cis3)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+
+	_, err = iCtrl.applyClusterImageSetFile(bCis3)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	err = iCtrl.client.Get(context.TODO(), client.ObjectKeyFromObject(cis3), createdCis)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	g.Expect(createdCis.GetLabels()["visible"]).To(gomega.Equal(cis3.GetLabels()["visible"]))
 
 	// unmarshal error
 	badCis := []byte("bad$:xys")
