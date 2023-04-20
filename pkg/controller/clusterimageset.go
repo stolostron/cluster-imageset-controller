@@ -58,12 +58,15 @@ func NewSyncImagesetCommand(logger logr.Logger) *cobra.Command {
 
 // AgentOptions defines the flags for workload agent
 type ImagesetOptions struct {
-	Log        logr.Logger
-	MetricAddr string
-	ProbeAddr  string
-	Interval   int
-	ConfigMap  string
-	Secret     string
+	Log                         logr.Logger
+	MetricAddr                  string
+	ProbeAddr                   string
+	Interval                    int
+	ConfigMap                   string
+	Secret                      string
+	LeaderElectionLeaseDuration time.Duration
+	LeaderElectionRenewDeadline time.Duration
+	LeaderElectionRetryPeriod   time.Duration
 }
 
 // NewWorkloadAgentOptions returns the flags with default value set
@@ -80,6 +83,31 @@ func (o *ImagesetOptions) AddFlags(cmd *cobra.Command) {
 	flags.StringVar(&o.Secret, "git-secret", "cluster-image-set-git-repo", "Authentication info to access the clusterImageSet Git repository.")
 	flags.StringVar(&o.MetricAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flags.StringVar(&o.ProbeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
+	flag.DurationVar(
+		&o.LeaderElectionLeaseDuration,
+		"leader-election-lease-duration",
+		137*time.Second,
+		"The duration that non-leader candidates will wait after observing a leadership "+
+			"renewal until attempting to acquire leadership of a led but unrenewed leader "+
+			"slot. This is effectively the maximum duration that a leader can be stopped "+
+			"before it is replaced by another candidate. This is only applicable if leader "+
+			"election is enabled.",
+	)
+	flag.DurationVar(
+		&o.LeaderElectionRenewDeadline,
+		"leader-election-renew-deadline",
+		107*time.Second,
+		"The interval between attempts by the acting master to renew a leadership slot "+
+			"before it stops leading. This must be less than or equal to the lease duration. "+
+			"This is only applicable if leader election is enabled.",
+	)
+	flag.DurationVar(
+		&o.LeaderElectionRetryPeriod,
+		"leader-election-retry-period",
+		26*time.Second,
+		"The duration the clients should wait between attempting acquisition and renewal "+
+			"of a leadership. This is only applicable if leader election is enabled.",
+	)
 
 }
 
@@ -95,6 +123,9 @@ func (o *ImagesetOptions) runControllerManager(ctx context.Context, mgr manager.
 			Port:                   9443,
 			HealthProbeBindAddress: o.ProbeAddr,
 			LeaderElection:         false,
+			LeaseDuration:          &o.LeaderElectionLeaseDuration,
+			RenewDeadline:          &o.LeaderElectionRenewDeadline,
+			RetryPeriod:            &o.LeaderElectionRetryPeriod,
 		})
 
 		if err != nil {
