@@ -81,7 +81,7 @@ func (o *ImagesetOptions) AddFlags(cmd *cobra.Command) {
 		"Interval in seconds when clusterImageSets are synced with the Git repository.")
 	flags.StringVar(&o.ConfigMap, "git-configmap", "cluster-image-set-git-repo", "Configuration info to access the clusterImageSet Git repository.")
 	flags.StringVar(&o.Secret, "git-secret", "cluster-image-set-git-repo", "Authentication info to access the clusterImageSet Git repository.")
-	flags.StringVar(&o.MetricAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
+	flags.StringVar(&o.MetricAddr, "metrics-bind-address", ":8387", "The address the metric endpoint binds to.")
 	flags.StringVar(&o.ProbeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.DurationVar(
 		&o.LeaderElectionLeaseDuration,

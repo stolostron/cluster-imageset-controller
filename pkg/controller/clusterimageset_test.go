@@ -95,22 +95,17 @@ func TestSetupImageSetController(t *testing.T) {
 
 	zapLog, _ := zap.NewDevelopment()
 	options := &ImagesetOptions{
-		Log:       zapr.NewLogger(zapLog),
-		Interval:  60,
-		ConfigMap: "cluster-image-set-git-repo",
+		Log:        zapr.NewLogger(zapLog),
+		Interval:   60,
+		MetricAddr: ":8387",
+		ConfigMap:  "cluster-image-set-git-repo",
 	}
-
-	mgr, err := manager.New(cfg, manager.Options{})
-	g.Expect(err).NotTo(gomega.HaveOccurred())
 
 	ctx := context.TODO()
 	controllerFunc := func(manager manager.Manager) {
-		err = options.runControllerManager(ctx, manager)
+		err := options.runControllerManager(ctx, manager)
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 	}
-	go controllerFunc(mgr)
-	time.Sleep(1 * time.Second)
-	ctx.Done()
 
 	go controllerFunc(nil)
 	time.Sleep(1 * time.Second)
