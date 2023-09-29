@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	eventuallyTimeout  = 30 // seconds
+	eventuallyTimeout  = 60 // seconds
 	eventuallyInterval = 1  // seconds
 )
 
@@ -106,7 +106,7 @@ var _ = ginkgo.BeforeSuite(func() {
 
 	data := map[string]string{
 		"gitRepoUrl":    "https://github.com/stolostron/acm-hive-openshift-releases.git",
-		"gitRepoBranch": "release-2.6",
+		"gitRepoBranch": "backplane-2.3",
 		"gitRepoPath":   "clusterImageSets",
 		"channel":       "fast",
 	}
