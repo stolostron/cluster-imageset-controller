@@ -91,7 +91,7 @@ spec:
       description: Java build
       name: java
       type: string
-    - default: ""
+    - default: "snyk-secret"
       description: Snyk Token Secret Name
       name: snyk-secret
       type: string
@@ -256,15 +256,13 @@ spec:
         value: $(tasks.build-container.results.BASE_IMAGES_DIGESTS)
       taskRef:
         bundle: quay.io/redhat-appstudio-tekton-catalog/task-deprecated-image-check:0.3@sha256:ae5068faed2ba324ce5a1090b2730c3eefc97160f8679d1f99c2b06f073aea79
+
         name: deprecated-image-check
       when:
       - input: $(params.skip-checks)
         operator: in
         values:
         - "false"
-      workspaces:
-      - name: test-ws
-        workspace: workspace
     - name: clair-scan
       params:
       - name: image-digest

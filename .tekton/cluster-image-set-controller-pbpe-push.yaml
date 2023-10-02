@@ -88,7 +88,7 @@ spec:
       description: Java build
       name: java
       type: string
-    - default: ""
+    - default: "snyk-secret"
       description: Snyk Token Secret Name
       name: snyk-secret
       type: string
@@ -259,9 +259,6 @@ spec:
         operator: in
         values:
         - "false"
-      workspaces:
-      - name: test-ws
-        workspace: workspace
     - name: clair-scan
       params:
       - name: image-digest
