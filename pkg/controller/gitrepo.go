@@ -176,6 +176,18 @@ func (r *ClusterImageSetController) getHTTPOptions() (*git.CloneOptions, error) 
 			TLSClientConfig: clientConfig, // #nosec G402
 		}
 
+		httpProxy := os.Getenv("HTTP_PROXY")
+		httpsProxy := os.Getenv("HTTPS_PROXY")
+		noProxy := os.Getenv("NO_PROXY")
+
+		r.log.Info(fmt.Sprintf("HTTP_PROXY=%s, HTTPS_PROXY=%s, NO_PROXY=%s", httpProxy, httpsProxy, noProxy))
+
+		if httpProxy != "" || httpsProxy != "" || noProxy != "" {
+			transportConfig.Proxy = http.ProxyFromEnvironment
+
+			r.log.Info("HTTP transport proxy set")
+		}
+
 		customClient := &http.Client{
 			Transport: transportConfig,  // #nosec G402
 			Timeout:   15 * time.Second, // 15 second timeout
