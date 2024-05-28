@@ -7,7 +7,7 @@ IMG ?= $(REPO)cluster-imageset-controller:latest
 export CGO_ENABLED=1
 
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-ENVTEST_K8S_VERSION = 1.22
+ENVTEST_K8S_VERSION = 1.20
 
 KUBECTL?=kubectl
 
