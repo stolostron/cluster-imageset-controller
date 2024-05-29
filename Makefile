@@ -58,8 +58,8 @@ vet: ## Run go vet against code.
 	go vet ./...
 
 # .PHONY: test
-# test: fmt vet envtest ## Run tests.
-# 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test $(shell go list ./... | grep -v /test/e2e) -coverprofile cover.out
+test: fmt vet envtest ## Run tests.
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test $(shell go list ./... | grep -v /test/e2e) -coverprofile cover.out
 
 ##@ Build
 .PHONY: vendor
@@ -89,7 +89,7 @@ ifndef ignore-not-found
 endif
 
 ENVTEST = $(shell pwd)/bin/setup-envtest
-ENVTEST_PACKAGE ?= sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+ENVTEST_PACKAGE ?= sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.17
 .PHONY: envtest
 envtest: ## Download envtest-setup locally if necessary.
 	$(call go-get-tool,$(ENVTEST),$(ENVTEST_PACKAGE))
