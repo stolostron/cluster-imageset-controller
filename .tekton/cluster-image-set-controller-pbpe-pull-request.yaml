@@ -96,8 +96,7 @@ spec:
       name: snyk-secret
       type: string
     - default: ""
-      description: Image tag expiration time, time values could be something like
-        1h, 2d, 3w for hours, days, and weeks, respectively.
+      description: Image tag expiration time, time values could be something like 1h, 2d, 3w for hours, days, and weeks, respectively.
       name: image-expires-after
     results:
     - description: ""
@@ -256,7 +255,6 @@ spec:
         value: $(tasks.build-container.results.BASE_IMAGES_DIGESTS)
       taskRef:
         bundle: quay.io/redhat-appstudio-tekton-catalog/task-deprecated-image-check:0.3@sha256:6df3f9a88242224048837a69e269d640799e7ee83984880ba2f57d8b0155990e
-
         name: deprecated-image-check
       when:
       - input: $(params.skip-checks)
